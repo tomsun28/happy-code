@@ -768,6 +768,6 @@ export class AIProviderFactory {
       return new AnthropicProvider(config, logger);
     }
 
-    throw new Error('No AI provider is configured. Please set an API key using: happy config --set-key <provider>');
+    throw new Error('No AI provider(zhipu) is configured. Please set an API key using: happy config --set-key zhipu');
   }
 }
