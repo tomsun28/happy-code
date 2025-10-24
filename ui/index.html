@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Code - 现代化开发工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        header {
+            padding: 2rem 0;
+            text-align: center;
+            color: white;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 2rem;
+        }
+
+        .hero {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 3rem;
+            margin: 2rem 0;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+            text-align: center;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: #666;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            text-align: center;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+
+        .feature-card p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .cta-section {
+            text-align: center;
+            padding: 3rem 0;
+            color: white;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+        }
+
+        .tech-stack {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+            color: white;
+        }
+
+        .tech-stack h3 {
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .tech-tags {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .tech-tag {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            backdrop-filter: blur(5px);
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            color: rgba(255, 255, 255, 0.8);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 2rem;
+            }
+            
+            .hero {
+                padding: 2rem;
+            }
+            
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .code-demo {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin: 2rem 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            overflow-x: auto;
+        }
+
+        .code-demo .comment {
+            color: #6a9955;
+        }
+
+        .code-demo .keyword {
+            color: #569cd6;
+        }
+
+        .code-demo .string {
+            color: #ce9178;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🚀 Happy Code</div>
+            <div class="tagline">让编程变得更加快乐和高效</div>
+        </header>
+
+        <div class="hero">
+            <h1>现代化的 AI 驱动开发工具</h1>
+            <p>Happy Code 是一个集成了多种 AI 提供商的智能编程助手，支持 ReAct 框架，让你的开发工作更加智能化。</p>
+            
+            <div class="code-demo">
+<span class="comment">// 使用 Happy Code 创建智能对话</span>
+<span class="keyword">const</span> response = <span class="keyword">await</span> happyCode.chat({
+  message: <span class="string">"帮我创建一个现代化的网页"</span>,
+  provider: <span class="string">"openai"</span>
+});
+
+<span class="comment">// 自动执行工具调用</span>
+<span class="keyword">if</span> (response.toolCalls) {
+  <span class="keyword">await</span> happyCode.executeTools(response.toolCalls);
+}
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3>多 AI 提供商支持</h3>
+                <p>集成 OpenAI、Anthropic、智谱 AI 等多个主流 AI 提供商，让你选择最适合的模型。</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>ReAct 框架</h3>
+                <p>基于 ReAct (Reasoning + Acting) 框架，让 AI 能够进行推理并执行具体的操作。</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🛠️</div>
+                <h3>丰富的工具集</h3>
+                <p>内置文件操作、Shell 命令、网络请求等多种工具，满足各种开发需求。</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">💾</div>
+                <h3>智能缓存</h3>
+                <p>自动缓存 AI 响应，减少重复请求，提高响应速度和降低成本。</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <h3>类型安全</h3>
+                <p>使用 TypeScript 开发，提供完整的类型定义，让开发更加安全可靠。</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔧</div>
+                <h3>易于扩展</h3>
+                <p>模块化设计，支持自定义工具和 AI 提供商，轻松扩展功能。</p>
+            </div>
+        </div>
+
+        <div class="tech-stack">
+            <h3>技术栈</h3>
+            <div class="tech-tags">
+                <span class="tech-tag">TypeScript</span>
+                <span class="tech-tag">Node.js</span>
+                <span class="tech-tag">OpenAI API</span>
+                <span class="tech-tag">Anthropic Claude</span>
+                <span class="tech-tag">智谱 AI</span>
+                <span class="tech-tag">ReAct Framework</span>
+                <span class="tech-tag">Commander.js</span>
+                <span class="tech-tag">Chalk</span>
+            </div>
+        </div>
+
+        <div class="cta-section">
+            <h2>开始使用 Happy Code</h2>
+            <p>立即体验 AI 驱动的智能编程助手</p>
+            <a href="#" class="cta-button" onclick="showInstallInstructions()">立即开始</a>
+        </div>
+
+        <footer>
+            <p>&copy; 2024 Happy Code. 让编程变得更加快乐！</p>
+        </footer>
+    </div>
+
+    <script>
+        function showInstallInstructions() {
+            alert(`安装 Happy Code:
+
+1. 克隆仓库:
+   git clone <repository-url>
+
+2. 安装依赖:
+   npm install
+
+3. 构建项目:
+   npm run build
+
+4. 配置 AI 提供商:
+   设置环境变量 OPENAI_API_KEY, ANTHROPIC_API_KEY 等
+
+5. 开始使用:
+   node dist/index.js chat "你好，Happy Code!"
+
+更多信息请查看项目文档。`);
+        }
+
+        // 添加一些交互效果
+        document.addEventListener('DOMContentLoaded', function() {
+            // 为特性卡片添加点击效果
+            const featureCards = document.querySelectorAll('.feature-card');
+            featureCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    this.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        this.style.transform = '';
+                    }, 150);
+                });
+            });
+
+            // 添加滚动动画
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            });
+
+            featureCards.forEach(card => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+                observer.observe(card);
+            });
+        });
+    </script>
+</body>
+</html>

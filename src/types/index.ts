@@ -101,6 +101,31 @@ export interface ToolCall {
   result?: ToolResult;
 }
 
+// ReAct 模式的数据结构
+export interface ReActStep {
+  thought: string;
+  action?: {
+    tool: string;
+    parameters: Record<string, any>;
+  };
+  observation?: string;
+  finish?: boolean;
+}
+
+export interface ReActResponse {
+  steps: ReActStep[];
+  finalAnswer?: string;
+  requiresMoreActions: boolean;
+}
+
+export interface ReActChatMessage extends ChatMessage {
+  reactData?: {
+    currentStep: number;
+    totalSteps: number;
+    reasoningChain: string[];
+  };
+}
+
 export interface Session {
   id: string;
   startTime: Date;

@@ -5,7 +5,7 @@ import { Logger } from './logger';
 import { SessionManager } from './session';
 import { ToolRegistry } from './tools';
 import { AIProviderFactory } from './ai-provider';
-import { ChatMessage, ToolCall } from '../types';
+import { ChatMessage, ToolCall, ReActResponse, ReActChatMessage } from '../types';
 
 interface CommandUsage {
   command: string;
@@ -244,6 +244,11 @@ export class ChatInterface {
 
   private async generateResponse(message: string): Promise<string> {
     try {
+      // 检查是否应该使用 ReAct 模式
+      if (this.shouldUseReActMode(message)) {
+        return await this.generateReActResponse(message);
+      }
+
       // Get AI provider
       const aiProvider = AIProviderFactory.getDefaultProvider(this.config, this.logger);
 
@@ -255,21 +260,21 @@ export class ChatInterface {
       // Add system message
       const systemMessage: ChatMessage = {
         role: 'system',
-        content: `You are "Happy", The current date is ${{currentDateTime}}. 
+        content: `You are "Happy", The current date is ${currentDateTime}.
         You are an intelligent and kind assistant, with depth and wisdom. You can lead the conversation, suggest topics, offer observations, illustrate points with examples.
 
 When asked for code, always wrap code snippets in Markdown \`\`\` blocks.
-Immediately after the code block, ask: “Would you like me to explain or break it down?” — unless the user explicitly says they don’t want explanation.
+Immediately after the code block, ask: "Would you like me to explain or break it down?" — unless the user explicitly says they don't want explanation.
 
 If you are asked about events after your knowledge cutoff (or information you are not certain of), you should say you may have incomplete information and that you may hallucinate.
 
-If tasks involve using tools (search, file reading, code execution etc), follow tool-use instructions carefully (read entire files, understand architecture, don’t duplicate code already present).
+If tasks involve using tools (search, file reading, code execution etc), follow tool-use instructions carefully (read entire files, understand architecture, don't duplicate code already present).
 
 When working on code projects: always read entire files, understand context, architecture, avoid making assumptions.
 
 Avoid providing or aiding malicious/illegal/harmful content (e.g., malware, hacking tools).
 
-Maintain friendly, helpful tone. Don’t correct user terminology unnecessarily.`
+Maintain friendly, helpful tone. Don't correct user terminology unnecessarily.`
       };
 
       // Prepare messages for API
@@ -283,8 +288,8 @@ Maintain friendly, helpful tone. Don’t correct user terminology unnecessarily.
       // Get tool definitions
       const toolDefinitions = aiProvider.convertToolsToSchema(this.toolRegistry);
 
-      // Get AI response
-      const response = await aiProvider.sendMessage(apiMessages, toolDefinitions);
+      // 使用带缓存的消息发送方法（仅在没有工具调用时使用缓存）
+      const response = await aiProvider.sendMessageWithCache(apiMessages, toolDefinitions);
 
       // Log usage if available
       if (response.usage) {
@@ -315,7 +320,7 @@ Maintain friendly, helpful tone. Don’t correct user terminology unnecessarily.
           });
         }
 
-        // Get final response from AI with tool results
+        // Get final response from AI with tool results (不使用缓存，因为包含工具结果)
         apiMessages = [
           systemMessage,
           ...messages,
@@ -344,6 +349,13 @@ Maintain friendly, helpful tone. Don’t correct user terminology unnecessarily.
         return finalResponse.content;
       }
 
+      // Add messages to session (only if no tool calls)
+      this.sessionManager.addMessage(userMessage);
+      this.sessionManager.addMessage({
+        role: 'assistant',
+        content: response.content
+      });
+
       return response.content;
 
     } catch (error) {
@@ -363,6 +375,402 @@ Maintain friendly, helpful tone. Don’t correct user terminology unnecessarily.
       }
 
       return "I'm having trouble connecting to the AI service. You can still use tool commands directly or try again later.";
+    }
+  }
+
+  // 缓存机制，避免重复计算
+  private reactModeCache = new Map<string, boolean>();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
+  private readonly CACHE_MAX_SIZE = 100;
+
+  // 判断是否应该使用 ReAct 模式 - 优化版本
+  private shouldUseReActMode(message: string): boolean {
+    // 检查缓存
+    const cacheKey = message.toLowerCase().trim();
+    const cached = this.reactModeCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    // 清理过期缓存
+    if (this.reactModeCache.size > this.CACHE_MAX_SIZE) {
+      this.reactModeCache.clear();
+    }
+
+    let shouldUseReAct = false;
+
+    // 1. 检查明确的工具调用
+    const hasExplicitToolCall = /\b(Read|Glob|Grep|Bash|Write|Edit)\s*\(/i.test(message);
+    if (hasExplicitToolCall) {
+      shouldUseReAct = true;
+    } else {
+      // 2. 基于关键词的智能判断
+      const reactKeywords = [
+        // 分析类
+        'analyze', 'investigation', 'explore', 'examine', 'inspect', 'review',
+        // 搜索类
+        'search', 'find', 'locate', 'look for', 'discover',
+        // 调试类
+        'debug', 'troubleshoot', 'diagnose', 'fix', 'solve', 'resolve',
+        // 开发类
+        'implement', 'create', 'build', 'develop', 'code', 'write',
+        // 优化类
+        'refactor', 'optimize', 'improve', 'enhance', 'update',
+        // 理解类
+        'understand', 'explain', 'show me', 'help with', 'work on'
+      ];
+
+      // 文件和代码相关的关键词
+      const fileCodeKeywords = [
+        'file', 'files', 'directory', 'folder', 'path',
+        'code', 'function', 'class', 'method', 'variable',
+        'project', 'repository', 'codebase', 'source'
+      ];
+
+      // 复杂任务指示词
+      const complexTaskKeywords = [
+        'step by step', 'how to', 'guide me', 'walk through',
+        'process', 'workflow', 'procedure'
+      ];
+
+      const lowerMessage = message.toLowerCase();
+      
+      // 检查是否包含 ReAct 关键词
+      const hasReActKeyword = reactKeywords.some(keyword => 
+        lowerMessage.includes(keyword)
+      );
+
+      // 检查是否涉及文件或代码操作
+      const hasFileCodeKeyword = fileCodeKeywords.some(keyword => 
+        lowerMessage.includes(keyword)
+      );
+
+      // 检查是否是复杂任务
+      const hasComplexTaskKeyword = complexTaskKeywords.some(keyword => 
+        lowerMessage.includes(keyword)
+      );
+
+      // 检查消息长度和复杂度
+      const isComplexMessage = message.length > 50 && 
+        (message.includes('?') || message.split(' ').length > 10);
+
+      // 综合判断
+      shouldUseReAct = (hasReActKeyword && hasFileCodeKeyword) ||
+                       (hasReActKeyword && hasComplexTaskKeyword) ||
+                       (hasFileCodeKeyword && isComplexMessage) ||
+                       hasComplexTaskKeyword;
+
+      // 排除简单的问候和一般性问题
+      const simplePatterns = [
+        /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no)$/i,
+        /^what is/i,
+        /^who is/i,
+        /^when is/i,
+        /^where is/i
+      ];
+
+      if (simplePatterns.some(pattern => pattern.test(message.trim()))) {
+        shouldUseReAct = false;
+      }
+    }
+
+    // 缓存结果
+    this.reactModeCache.set(cacheKey, shouldUseReAct);
+
+    // 记录决策用于调试
+    this.logger.debug(`ReAct mode decision for "${message.substring(0, 50)}...": ${shouldUseReAct}`);
+
+    return shouldUseReAct;
+  }
+
+  // 使用 ReAct 模式生成响应 - 优化版本
+  private async generateReActResponse(message: string): Promise<string> {
+    console.log(chalk.blue('\n🧠 Using ReAct (Reasoning and Acting) mode...'));
+
+    const aiProvider = AIProviderFactory.getDefaultProvider(this.config, this.logger);
+    const session = this.sessionManager.getCurrentSession();
+    const messages = session ? session.messages : [];
+    const currentDateTime = new Date().toLocaleString();
+
+    // ReAct 系统提示词 - 优化版本
+    const reactSystemMessage: ChatMessage = {
+      role: 'system',
+      content: `You are "Happy", an intelligent AI assistant using the ReAct (Reasoning and Acting) framework. The current date is ${currentDateTime}.
+
+You MUST follow the ReAct format for complex tasks that require tool usage:
+
+Thought: [Your reasoning about what to do next]
+Action: [tool_name(parameters)]
+Observation: [Result of the action]
+Thought: [Your reasoning about the observation]
+Action: [next_tool_name(parameters)]
+Observation: [Result of the action]
+... (repeat as needed)
+Final Answer: [Your final response to the user]
+
+Available tools:
+- Read(file_path="./path/to/file") - Read file contents
+- Glob(pattern="**/*.js") - Search for files matching pattern
+- Grep(pattern="text", glob="**/*.ts") - Search for text in files
+- Bash(command="command") - Execute shell commands
+- Write(file_path="./path", content="text") - Write content to file
+- Edit(file_path="./path", old_string="old", new_string="new") - Edit file
+
+Important Rules:
+1. Always start with a Thought explaining your reasoning
+2. Use Action to call tools when needed
+3. Wait for Observation before continuing
+4. Use Final Answer when you have the complete solution
+5. Think step by step and show your reasoning process
+6. Read entire files before making changes
+7. Be thorough in your analysis
+8. If a tool fails, analyze the error and try alternative approaches
+9. Always validate your assumptions with concrete observations
+10. Provide clear, actionable final answers
+
+Error Handling:
+- If a tool execution fails, acknowledge the error in your next Thought
+- Try alternative approaches or tools when possible
+- Don't repeat the same failed action without modification
+- Ask for clarification if the task requirements are unclear
+
+Example:
+Thought: I need to understand the project structure. Let me start by looking for the main configuration file.
+Action: Glob(pattern="package.json")
+Observation: Found package.json at ./package.json
+Thought: Now let me read the package.json to understand the project dependencies and scripts.
+Action: Read(file_path="./package.json")
+Observation: [file content here]
+Thought: Based on the package.json, I can see this is a Node.js project. Let me also check for the main entry point.
+Action: Glob(pattern="index.js")
+Observation: [search results]
+Final Answer: I've analyzed your project structure... [final response]`
+    };
+
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: message
+    };
+
+    let currentMessages: ChatMessage[] = [reactSystemMessage, ...messages, userMessage];
+    let reasoningChain: string[] = [];
+    let stepCount = 0;
+    let consecutiveErrors = 0;
+    const maxSteps = 10; // 防止无限循环
+    const maxConsecutiveErrors = 3; // 防止错误循环
+
+    try {
+      while (stepCount < maxSteps && consecutiveErrors < maxConsecutiveErrors) {
+        const response = await aiProvider.sendMessage(currentMessages);
+        stepCount++;
+
+        console.log(chalk.yellow(`\n🧠 Step ${stepCount}:`));
+        console.log(chalk.gray('─'.repeat(50)));
+
+        // 尝试解析 ReAct 响应
+        const reactResponse = (aiProvider as any).parseReActResponse(response.content);
+
+        if (reactResponse.steps.length > 0) {
+          let hasValidAction = false;
+          
+          // 显示 ReAct 步骤
+          for (let i = 0; i < reactResponse.steps.length; i++) {
+            const step = reactResponse.steps[i];
+
+            if (step.thought) {
+              console.log(chalk.cyan(`\n💭 Thought:`));
+              console.log(step.thought);
+              reasoningChain.push(`Thought: ${step.thought}`);
+            }
+
+            if (step.action) {
+              hasValidAction = true;
+              console.log(chalk.magenta(`\n🔧 Action:`));
+              console.log(`${step.action.tool}(${JSON.stringify(step.action.parameters)})`);
+              reasoningChain.push(`Action: ${step.action.tool}(${JSON.stringify(step.action.parameters)})`);
+
+              // 执行工具调用
+              try {
+                const toolResult = await this.toolRegistry.executeTool(step.action.tool, step.action.parameters);
+
+                let observationText = '';
+                if (toolResult.success) {
+                  consecutiveErrors = 0; // 重置错误计数
+                  
+                  if (typeof toolResult.data === 'string') {
+                    observationText = toolResult.data;
+                  } else if (toolResult.data?.content) {
+                    observationText = toolResult.data.content;
+                  } else if (toolResult.data?.stdout) {
+                    observationText = toolResult.data.stdout;
+                  } else {
+                    observationText = JSON.stringify(toolResult.data);
+                  }
+                  
+                  console.log(chalk.green(`\n👁️  Observation:`));
+                  // 限制输出长度，避免控制台过载
+                  const displayText = observationText.length > 1000 
+                    ? observationText.substring(0, 1000) + '\n... (truncated for display)'
+                    : observationText;
+                  console.log(displayText);
+                } else {
+                  consecutiveErrors++;
+                  observationText = `Error: ${toolResult.error}`;
+                  console.log(chalk.red(`\n❌ Observation:`));
+                  console.log(observationText);
+                  
+                  // 记录错误详情用于调试
+                  this.logger.warn(`Tool execution failed: ${step.action.tool}`, {
+                    parameters: step.action.parameters,
+                    error: toolResult.error,
+                    stepCount,
+                    consecutiveErrors
+                  });
+                }
+
+                reasoningChain.push(`Observation: ${observationText}`);
+
+                // 添加工具执行结果到对话历史
+                currentMessages.push({
+                  role: 'assistant',
+                  content: `Thought: ${step.thought}\nAction: ${step.action.tool}(${JSON.stringify(step.action.parameters)})`
+                });
+
+                currentMessages.push({
+                  role: 'tool',
+                  content: observationText,
+                  name: step.action.tool
+                });
+
+              } catch (error) {
+                consecutiveErrors++;
+                const errorText = `Tool execution error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+                console.log(chalk.red(`\n❌ Observation:`));
+                console.log(errorText);
+                reasoningChain.push(`Observation: ${errorText}`);
+
+                // 记录详细错误信息
+                this.logger.error(`Unexpected tool execution error: ${step.action.tool}`, {
+                  error: error instanceof Error ? error.stack : error,
+                  parameters: step.action.parameters,
+                  stepCount,
+                  consecutiveErrors
+                });
+
+                currentMessages.push({
+                  role: 'assistant',
+                  content: `Thought: ${step.thought}\nAction: ${step.action.tool}(${JSON.stringify(step.action.parameters)})`
+                });
+
+                currentMessages.push({
+                  role: 'tool',
+                  content: errorText,
+                  name: step.action.tool
+                });
+              }
+            }
+          }
+
+          // 检查是否完成
+          if (!reactResponse.requiresMoreActions || reactResponse.finalAnswer) {
+            const finalAnswer = reactResponse.finalAnswer || 'Task completed successfully.';
+
+            console.log(chalk.green(`\n✅ Final Answer:`));
+            console.log(finalAnswer);
+
+            // 添加最终助手消息到会话
+            const finalMessage: ReActChatMessage = {
+              role: 'assistant',
+              content: finalAnswer,
+              reactData: {
+                currentStep: stepCount,
+                totalSteps: stepCount,
+                reasoningChain
+              }
+            };
+
+            this.sessionManager.addMessage(finalMessage);
+            return finalAnswer;
+          }
+
+          // 如果连续错误过多，提供错误恢复建议
+          if (consecutiveErrors >= maxConsecutiveErrors) {
+            console.log(chalk.yellow('\n⚠️  Too many consecutive errors, attempting recovery...'));
+            const recoveryPrompt = `The previous actions encountered errors. Please:
+1. Analyze what went wrong
+2. Try a different approach or tool
+3. If the task cannot be completed, explain why and suggest alternatives
+4. Provide a Final Answer with your analysis`;
+            
+            currentMessages.push({
+              role: 'user',
+              content: recoveryPrompt
+            });
+            consecutiveErrors = 0; // 重置计数，给一次恢复机会
+          } else if (hasValidAction) {
+            // 继续循环，让 AI 基于观察结果进行下一步思考
+            const continuePrompt = "Based on the observations above, continue with the next Thought and Action, or provide a Final Answer if you have enough information.";
+            currentMessages.push({
+              role: 'user',
+              content: continuePrompt
+            });
+          }
+
+        } else {
+          // 如果无法解析 ReAct 格式，尝试引导 AI 使用正确格式
+          console.log(chalk.yellow('\n⚠️  Could not parse ReAct format, guiding AI...'));
+          
+          if (stepCount === 1) {
+            // 第一步就无法解析，可能是简单回答，直接返回
+            console.log(chalk.blue('\n📝 Direct response:'));
+            console.log(response.content);
+            return response.content;
+          } else {
+            // 引导 AI 使用正确的 ReAct 格式
+            const formatGuidance = `Please follow the ReAct format strictly:
+Thought: [Your reasoning]
+Action: [tool_name(parameters)]
+Observation: [Will be provided after action]
+...
+Final Answer: [Your conclusion]
+
+Continue with your analysis using this format.`;
+            
+            currentMessages.push({
+              role: 'user',
+              content: formatGuidance
+            });
+          }
+        }
+      }
+
+      // 达到最大步数限制
+      console.log(chalk.yellow('\n⚠️  Maximum steps reached, providing summary...'));
+      const summaryPrompt = 'Please provide a Final Answer summarizing what you have discovered so far and any recommendations.';
+      
+      currentMessages.push({
+        role: 'user',
+        content: summaryPrompt
+      });
+
+      // 尝试获取最终总结
+      const finalResponse = await aiProvider.sendMessage(currentMessages);
+      const finalReactResponse = (aiProvider as any).parseReActResponse(finalResponse.content);
+      
+      if (finalReactResponse.finalAnswer) {
+        return finalReactResponse.finalAnswer;
+      } else {
+        return finalResponse.content;
+      }
+
+    } catch (error) {
+      this.logger.error('ReAct mode execution failed', error);
+      console.log(chalk.red('\n❌ ReAct mode encountered an error:'));
+      console.log(error instanceof Error ? error.message : 'Unknown error');
+      
+      // 回退到普通模式
+      console.log(chalk.blue('\n🔄 Falling back to normal mode...'));
+      return this.generateResponse(message);
     }
   }
 
