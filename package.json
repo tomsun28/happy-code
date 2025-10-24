@@ -1,6 +1,6 @@
 {
   "name": "@tomsun28/happy-code",
-  "version": "0.0.2-beta.1",
+  "version": "0.1.0",
   "description": "A simplified AI-powered CLI tool for intelligent code operations",
   "main": "dist/index.js",
   "bin": {

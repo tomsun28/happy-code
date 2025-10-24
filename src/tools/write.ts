@@ -35,8 +35,11 @@ export class WriteTool implements ToolInterface {
 
       await fs.mkdir(dir, { recursive: true });
 
+      // Process content to handle escaped newlines
+      const processedContent = content.replace(/\\n/g, '\n');
+
       // Write file
-      await fs.writeFile(absolutePath, content, 'utf8');
+      await fs.writeFile(absolutePath, processedContent, 'utf8');
 
       // Get file stats after writing
       const stats = await fs.stat(absolutePath);
@@ -44,7 +47,7 @@ export class WriteTool implements ToolInterface {
       return {
         success: true,
         data: {
-          content: content,
+          content: processedContent,
           path: absolutePath,
           size: stats.size
         },
